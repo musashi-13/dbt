@@ -34,7 +34,6 @@ df = df.selectExpr("CAST(value AS STRING) as json") \
        .select(from_json("json", schema).alias("data")) \
        .select("data.*") \
        .withColumn("post_timestamp", to_timestamp("post_timestamp"))
-       # <-- no more to_json here!
 
 # Create checkpoint directories
 checkpoint_dir = "/home/musashi/dbt_project/checkpoint"
@@ -104,10 +103,42 @@ query_agg = df_agg.writeStream \
     .option("checkpointLocation", f"{checkpoint_dir}/agg") \
     .start()
 
-# Run both queries concurrently
+# User activity aggregation
+user_agg = df.withWatermark("post_timestamp", "10 minutes") \
+             .groupBy(
+                 window("post_timestamp", "5 minutes"),
+                 "user_id"
+             ).agg(
+                 count("*").alias("post_count"),
+                 sum("likes").alias("total_likes")
+             )
+
+# Write user activity to MySQL
+def write_user_agg_to_mysql(batch_df, batch_id):
+    batch_df_with_time = batch_df.withColumn("window_start", col("window.start")) \
+                                 .withColumn("window_end", col("window.end")) \
+                                 .drop("window")
+    batch_df_with_time.write \
+        .format("jdbc") \
+        .option("url", "jdbc:mysql://localhost:3306/social_media_db?useSSL=false") \
+        .option("dbtable", "user_activity") \
+        .option("user", "spark_user") \
+        .option("password", "sparkpass") \
+        .option("driver", "com.mysql.cj.jdbc.Driver") \
+        .mode("append") \
+        .save()
+
+query_user_agg = user_agg.writeStream \
+    .foreachBatch(write_user_agg_to_mysql) \
+    .outputMode("append") \
+    .option("checkpointLocation", f"{checkpoint_dir}/user_agg") \
+    .start()
+
+# Run all queries concurrently
 try:
     spark.streams.awaitAnyTermination()
 except KeyboardInterrupt:
     query_raw.stop()
     query_agg.stop()
+    query_user_agg.stop()
     print("Stopped streaming queries")

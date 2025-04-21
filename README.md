@@ -37,7 +37,7 @@ echo "export PYSPARK_PYTHON=/usr/bin/python3" >> ~/.bashrc
 /usr/local/kafka/bin/kafka-topics.sh --create --topic top3 --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092
 
 
-/usr/local/kafka/bin/kafka-consumer-groups.sh   --bootstrap-server localhost:9092   --group my-spark-consumer   --reset-offsets   --to-earliest   --topic top1   --topic top2   --topic top3   --execute
+/usr/local/kafka/bin/kafka-consumer-groups.sh   --bootstrap-server localhost:9092   --group spark-consumer   --reset-offsets   --to-earliest   --topic top1   --topic top2   --topic top3   --execute
 
 rm -rf /home/musashi/dbt_project/checkpoint/raw
 rm -rf /home/musashi/dbt_project/checkpoint/agg
